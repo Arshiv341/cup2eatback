@@ -1,6 +1,14 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is missing on production server.');
+  }
+  return secret || 'cuptoeat_dev_super_secret_jwt_key_2026';
+};
+
 const protect = async (req, res, next) => {
   let token;
 
@@ -19,10 +27,7 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'cuptoeat_dev_super_secret_jwt_key_2026'
-    );
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = await User.findById(decoded.id).select('-password');
     if (!req.user) {
       return res.status(401).json({

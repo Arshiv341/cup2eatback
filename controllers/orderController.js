@@ -151,7 +151,7 @@ const getMyOrders = async (req, res) => {
   }
 };
 
-// Track order by Order ID (public tracking endpoint)
+// Track order by Order ID (public tracking endpoint with data masking)
 const trackOrder = async (req, res) => {
   try {
     const order = await Order.findOne({
@@ -162,7 +162,19 @@ const trackOrder = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order reference not found' });
     }
 
-    return res.status(200).json({ success: true, order });
+    // Mask sensitive contact details for public tracking
+    const orderObj = order.toObject();
+    if (orderObj.customer) {
+      if (orderObj.customer.phone && orderObj.customer.phone.length > 4) {
+        orderObj.customer.phone = '******' + orderObj.customer.phone.slice(-4);
+      }
+      if (orderObj.customer.email && orderObj.customer.email.includes('@')) {
+        const [userPart, domain] = orderObj.customer.email.split('@');
+        orderObj.customer.email = userPart.slice(0, 2) + '***@' + domain;
+      }
+    }
+
+    return res.status(200).json({ success: true, order: orderObj });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

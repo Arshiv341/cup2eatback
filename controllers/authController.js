@@ -3,10 +3,18 @@ const User = require('../models/User');
 const OTP = require('../models/OTP');
 const emailService = require('../services/emailService');
 
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is missing on production server.');
+  }
+  return secret || 'cuptoeat_dev_super_secret_jwt_key_2026';
+};
+
 const generateToken = (id) => {
   return jwt.sign(
     { id },
-    process.env.JWT_SECRET || 'cuptoeat_dev_super_secret_jwt_key_2026',
+    getJwtSecret(),
     { expiresIn: '30d' }
   );
 };

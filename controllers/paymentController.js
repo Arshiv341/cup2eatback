@@ -69,13 +69,34 @@ const verifyRazorpaySignature = async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, internalOrderId } = req.body;
 
+    if (!internalOrderId) {
+      return res.status(400).json({ success: false, message: 'Internal order ID is required.' });
+    }
+
     const order = await Order.findById(internalOrderId);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
+    // Prevent duplicate processing
+    if (order.paymentStatus === 'Paid') {
+      return res.status(200).json({
+        success: true,
+        message: 'Order payment has already been verified and confirmed.',
+        order,
+      });
+    }
+
+    // Verify order ID match
+    if (order.razorpayOrderId && razorpay_order_id && order.razorpayOrderId !== razorpay_order_id) {
+      return res.status(400).json({ success: false, message: 'Razorpay order reference mismatch.' });
+    }
+
     // Verify cryptographic signature if secret is present
-    if (process.env.RAZORPAY_KEY_SECRET && razorpay_signature) {
+    if (process.env.RAZORPAY_KEY_SECRET) {
+      if (!razorpay_signature) {
+        return res.status(400).json({ success: false, message: 'Payment signature is required for verification.' });
+      }
       const generatedSignature = crypto
         .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
         .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -84,8 +105,13 @@ const verifyRazorpaySignature = async (req, res) => {
       if (generatedSignature !== razorpay_signature) {
         order.paymentStatus = 'Failed';
         await order.save();
-        return res.status(400).json({ success: false, message: 'Payment signature verification failed' });
+        return res.status(400).json({ success: false, message: 'Payment signature verification failed.' });
       }
+    } else if (process.env.NODE_ENV === 'production') {
+      return res.status(500).json({
+        success: false,
+        message: 'Payment verification secret is not configured on production server.',
+      });
     }
 
     // Payment successfully verified
@@ -109,8 +135,8 @@ const verifyRazorpaySignature = async (req, res) => {
       order,
     });
   } catch (err) {
-    console.error('Payment verification error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    console.error('Payment verification error:', err.message || err);
+    return res.status(500).json({ success: false, message: 'Payment verification failed.' });
   }
 };
 

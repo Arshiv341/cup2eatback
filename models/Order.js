@@ -113,4 +113,9 @@ const orderSchema = new mongoose.Schema(
   }
 );
 
+// Indexes for performance on order tracking, payments, and customer lookups
+orderSchema.index({ 'customer.userId': 1, createdAt: -1 });
+orderSchema.index({ 'customer.email': 1 });
+orderSchema.index({ razorpayOrderId: 1 });
+
 module.exports = mongoose.model('Order', orderSchema);
