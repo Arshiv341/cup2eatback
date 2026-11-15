@@ -24,6 +24,9 @@ const Setting = require('./models/Setting');
 
 const app = express();
 
+// Trust reverse proxy (required for Render, Heroku, and cloud deployment rate limiters)
+app.set('trust proxy', 1);
+
 // Connect to MongoDB Atlas
 connectDB().then(async (conn) => {
   if (conn) {
@@ -150,6 +153,20 @@ app.get('/', (req, res) => {
   });
 });
 
+// Browser redirect for root frontend routes accessed on the backend domain
+app.get(['/login', '/register'], (req, res) => {
+  const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',')[0].trim().replace(/\/$/, '') : null;
+  if (clientUrl && clientUrl.startsWith('http')) {
+    return res.redirect(`${clientUrl}${req.path}`);
+  }
+  res.status(405).json({
+    success: false,
+    message: `This is the backend API service. To access the user interface, open the frontend website or send a POST request to /api/auth${req.path}.`,
+    endpoint: `/api/auth${req.path}`,
+    expectedMethod: 'POST',
+  });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({
@@ -189,10 +206,13 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
-  console.log(`[Cup2Eat Server] Running on http://localhost:${PORT}`);
-});
+let server;
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  server = app.listen(PORT, () => {
+    console.log(`[Cup2Eat Server] Running on http://localhost:${PORT}`);
+  });
+}
 
 // Graceful shutdown handling
 const gracefulShutdown = () => {
